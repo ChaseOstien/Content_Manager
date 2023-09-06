@@ -17,10 +17,12 @@ inquirer.prompt([
             "Add Department", 
             "Add Role", 
             "Add an Employee", 
-            "Update Employee Role", 
+            "Update Employee Role",
+            "Update Employee Manager",
+            "View Employee by Manager",
+            "View Employees by Department",
             "Exit Program"
         ]
-        
     }
 ]).then(answers => {
         const answer = answers.main;
@@ -39,6 +41,12 @@ inquirer.prompt([
                 addEmployee();
             } else if (answer === "Update Employee Role") {
                 updateEmployee();
+            } else if (answer === "Update Employee Manager") {
+                updateManager();
+            } else if (answer === "View Employee by Manager") {
+                viewManager();
+            } else if (answer === "View Employees by Department") {
+                viewDepartment(); 
             } else if (answer === "Exit Program") {
                 process.exit(0);
             } else {
@@ -313,5 +321,120 @@ const updateEmployee = () => {
     });
 });
 }
+
+const updateManager = () => {
+    const sql = `SELECT first_name, last_name, id FROM employee`;
+    db.query(sql, (err, result) => {
+        if (err) {
+            throw err;
+        }
+        const employees = result.map(({first_name, last_name, id}) => ({name: `${first_name} ${last_name}`, value: id}));
+    inquirer.prompt([
+        {
+            type: "list",
+            name: "employee",
+            message: "Which employee's manager would you like to update?",
+            choices: employees
+            }
+        ]).then(answer => {
+            const employee = answer.employee;
+            const params  = [employee];
+            const sql = `SELECT first_name, last_name, id FROM employee`;
+            db.query(sql, (err, result) => {
+                if (err) {
+                    throw err;
+                }
+                const managers = result.map(({first_name, last_name, id}) => ({name: `${first_name} ${last_name}`, value: id}));
+                managers.push({name: "No manager", value: null});
+                inquirer.prompt([
+                    {
+                        type: "list",
+                        name: "managers",
+                        message: "Choose the employee's new manager!",
+                        choices: managers
+                    }
+                ]).then(answer => {
+                    const manager = answer.managers;
+                    params.unshift(manager);
+                    const sql = `UPDATE employee
+                                SET manager_id = ?
+                                WHERE id = ?`;
+                    db.query(sql, params, (err) => {
+                        if (err) {
+                            throw err;
+                        }
+                        console.log("Manager Updated!");
+                        return showMenu();
+                    });
+                });
+            });
+        });
+    });
+}
+
+const viewManager = () => {
+const sql = `SELECT first_name, last_name, id FROM employee WHERE manager_id IS NULL`;
+db.query(sql, (err, result) => {
+    if (err) {
+        throw err;
+    }
+    const employees = result.map(({first_name, last_name, id}) => ({name: `${first_name} ${last_name}`, value: id}));
+    inquirer.prompt([
+        {
+            type: "list",
+            name: "employee",
+            message: "Which managers direct reports would you like to view?",
+            choices: employees
+            }
+        ]).then(answer => {
+            const employee = answer.employee;
+            const params = [employee];
+            const sql = `SELECT * FROM employee
+            WHERE manager_id = ?`;
+            db.query(sql, params, (err, result) => {
+                if (err) {
+                    throw err;
+                }
+                console.log("\n");
+                console.table(result);
+                return showMenu();
+            });
+        });
+    });
+};
+
+const viewDepartment = () => {
+    const sql = `SELECT * FROM department`;
+    db.query(sql, (err, result) => {
+        if (err) {
+            throw err;
+        }
+        const departments = result.map(({ name, id }) => ({name: name, value: id}));
+        inquirer.prompt([
+            {
+                type: "list",
+                name: "departments",
+                message: "Choose a department to view.",
+                choices: departments
+            }
+        ]).then(answer => {
+            const department = answer.departments;
+            const params = (department);
+            const sql = `SELECT employee.id, first_name, last_name, department.name AS department
+            FROM employee
+            LEFT JOIN roles ON employee.role_id = roles.id
+            LEFT JOIN department ON roles.department_id = department.id
+            WHERE department.id = ?`;
+            db.query(sql, params, (err, result) => {
+                if (err) {
+                    throw err;
+                }
+                console.log("\n");
+                console.table(result);
+                return showMenu();
+            });
+        });
+    });
+};
 initialize();
 module.exports = { showMenu };
